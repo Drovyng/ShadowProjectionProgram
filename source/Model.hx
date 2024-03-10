@@ -1,8 +1,6 @@
 package;
 
 import Logic.TVector;
-import openfl.desktop.DockIcon;
-import Logic.LVector;
 import openfl.events.Event;
 import openfl.net.FileFilter;
 import openfl.net.FileReference;
@@ -23,11 +21,11 @@ class ModelHandler {
         _file.addEventListener(Event.SELECT, onModelBrowsed);
     }
     public static function getModel(path:String) {
-        return PlayState.instance.loadModel(parseModel(File.getContent("models/" + path)), false);
+        PlayState.instance.loadModel(parseModel(File.getContent("models/" + path)));
     }
     private static function onModelBrowsed(_) {
         _file.load();
-        PlayState.instance.loadModel(parseModel(_file.data.toString()));
+        PlayState.loadNextModel(parseModel(_file.data.toString()));
 		_file.removeEventListener(Event.SELECT, onModelBrowsed);
         _file = null;
     }

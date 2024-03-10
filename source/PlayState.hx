@@ -1,5 +1,6 @@
 package;
 
+import flixel.FlxCamera;
 import Logic.LVector;
 import Logic.LVector;
 import Logic.LVector;
@@ -35,8 +36,13 @@ class PlayState extends FlxUIState
 {
 	public static var instance:PlayState;
 
+	public static var SCENE_SCALE:Int = 2;
+
+	public static var gameCamera:FlxCamera;
+
 	public var rayRotation:LVector = new LVector(0, 0, 0);
 
+	public var allowControls:Bool = true;
 
 	public var planeScale:Float = 8;
 
@@ -48,18 +54,18 @@ class PlayState extends FlxUIState
 	public var faceSprite:FlxSprite;
 
 	public var showRayDir:Bool = false;
-	public var raySprite:FlxSprite;
 
 	public var axisShow:String = "xyz";
+	public var axisList:Array<FlxSprite> = [];
 
+	public static var modelToLoad:Model = null;
 	public var model:Model;
 	public var modelVertices:Array<LVector>;
 	public var modelShadowVertices:Array<LVector>;
 
-	public var camFollow:FlxObject = new FlxObject(FlxG.width / 2, FlxG.height / 2);
-	public var camFollowPos:FlxPoint = new FlxPoint(FlxG.width / 2, FlxG.height / 2);
-
-	public var modelAlphaTween:Float = 0;
+	public var camFollow:FlxObject = new FlxObject(FlxG.width * SCENE_SCALE / 2, FlxG.height * SCENE_SCALE / 2);
+	public var camFollowPos:FlxPoint = new FlxPoint(FlxG.width * SCENE_SCALE / 2, FlxG.height * SCENE_SCALE / 2);
+	public var camFollowVector:LVector = new LVector();
 
 	public var facesColors:Array<FlxColor> = [
 		FlxColor.RED,
@@ -70,8 +76,18 @@ class PlayState extends FlxUIState
 		FlxColor.CYAN,
 	];
 
-	public function loadModel(getModel:Model, ?redraw:Bool = true) {
-		if (getModel == null || getModel.vertices == null || getModel.edges == null || getModel.faces == null){
+	public static function loadNextModel(nextModel:Model) {
+		modelToLoad = nextModel;
+
+		LoadingSubstate.onEnd = function() {
+			FlxG.switchState(new PlayState());
+		};
+
+		instance.openSubState(new LoadingSubstate(true));
+	}
+
+	public function loadModel(getModel:Model) {
+		if (getModel == null || getModel.vertices == null || getModel.edges == null || getModel.faces == null || getModel.raysRot == null){
 
 			var modelsFiles:Array<String> = [];
 			if (!FileSystem.exists("models")){
@@ -89,9 +105,9 @@ class PlayState extends FlxUIState
 					modelsFiles.remove(modl);
 				}
 			}
-			
 			if (modelsFiles.length > 0){
 				ModelHandler.getModel(FlxG.random.getObject(modelsFiles));
+				return;
 			}
 			else {
 				var models:Array<Model> = [
@@ -111,32 +127,25 @@ class PlayState extends FlxUIState
 						vertices: [new LVector(-1.5, 2, 1.5), new LVector(1.5, 2, 1.5), new LVector(1.5, 2, -1.5), new LVector(-1.5, 2, -1.5), new LVector(-1.5, 5, 1.5), new LVector(1.5, 5, 1.5), new LVector(1.5, 5, -1.5), new LVector(-1.5, 5, -1.5)],
 						edges: [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]],
 						faces: [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
-						raysRot: new LVector()
+						raysRot: new LVector(60, 315, 0)
 					}
 				];
 				model = FlxG.random.getObject(models);
 			}
-
-			if (redraw) {
-				rayRotation = LVector.fromTypedef(model.raysRot);
-				updateRaySteppers();
-				onChangeEverything();
-			}
+			trace(model);
+			trace(model.raysRot);
+			rayRotation = LVector.fromTypedef(model.raysRot);
 			return;
 		}
 		model = getModel;
 
-		if (redraw) {
-			rayRotation = LVector.fromTypedef(model.raysRot);
-			updateRaySteppers();
-			onChangeEverything();
-		}
+		rayRotation = LVector.fromTypedef(model.raysRot);
 	}
 
 	public function updateRaySteppers() {
-		UI_Ray_AxisSteppers[1].value = rayRotation.x;
+		UI_Ray_AxisSteppers[1].value = -rayRotation.z;
 		UI_Ray_AxisSteppers[2].value = rayRotation.y;
-		UI_Ray_AxisSteppers[3].value = rayRotation.z;
+		UI_Ray_AxisSteppers[3].value = rayRotation.x;
 	}
 
 	override public function create()
@@ -151,37 +160,40 @@ class PlayState extends FlxUIState
 
 		FlxAssets.FONT_DEFAULT = "Arial";
 
-		loadModel(null, false);
+		loadModel(modelToLoad);
 		
 		super.create();
 
-		FlxG.camera.bgColor = 0xFF8888DD;
-		FlxG.camera.follow(camFollow, null, 1);
+		
+		gameCamera = new FlxCamera();
+		gameCamera.bgColor = 0xFF8888DD;
+		gameCamera.follow(camFollow, null, 1);
+
+		FlxG.cameras.reset(gameCamera);
+		FlxCamera.defaultCameras = [gameCamera];
+
 
 		
-		var bgSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height, 0xFF8888DD);
+		var bgSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE, 0xFF8888DD);
 		add(bgSprite);
 
 
-		planeSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height);
+		planeSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE);
 		add(planeSprite);
 
 
-		axisSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height);
+		axisSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE);
 		add(axisSprite);
 
 		
-		faceSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height, FlxColor.TRANSPARENT);
+		faceSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE, FlxColor.TRANSPARENT);
 		add(faceSprite);
 
-		edgeSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height, FlxColor.TRANSPARENT);
+		edgeSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE, FlxColor.TRANSPARENT);
 		add(edgeSprite);
 
-		vertSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height, FlxColor.TRANSPARENT);
+		vertSprite = new FlxSprite(0, 0).makeGraphic(FlxG.width * SCENE_SCALE, FlxG.height * SCENE_SCALE, FlxColor.TRANSPARENT);
 		add(vertSprite);
-
-		raySprite = new FlxSprite(0, 0).makeGraphic(FlxG.width, FlxG.height, FlxColor.TRANSPARENT);
-		add(raySprite);
 
 		add(UI_VerticesTexts);
 		add(UI_ShadowVerticesTexts);
@@ -189,6 +201,18 @@ class PlayState extends FlxUIState
 		createUIStuff();
 
 		onChangeEverything();
+
+		LoadingSubstate.onEnd = function() {
+			allowControls = true;
+		};
+		openSubState(new LoadingSubstate(false));
+
+		update(0);
+
+		camFollow.x = camFollowPos.x;
+		camFollow.y = camFollowPos.y;
+
+		allowControls = false;
 	}
 
 	public var UI_OffsetY:Float = 40;
@@ -206,6 +230,8 @@ class PlayState extends FlxUIState
 		"Ось Z"
 	];
 	public var UI_Ray_AxisWrongText:FlxUIText;
+	public var UI_Ray_AxisSpriteBG:FlxSprite;
+	public var UI_Ray_AxisSprite:FlxSprite;
 
 	public var UI_AxisSteppers:Array<RFlxUINumericStepper> = [];
 	public var UI_AxisSteppersText:Array<FlxUIText> = [];
@@ -220,7 +246,6 @@ class PlayState extends FlxUIState
 	public var UI_OptionsHandlerCheckBoxes:Array<RFlxUICheckBox> = [];
 	public var UI_OptionsHandlerTexts:Array<FlxUIText> = [];
 	public var UI_OptionsHandlerLabels:Array<Dynamic> = [
-		["Цветные оси", "axisColored"],
 		["Показать сетку", "drawGrid"],
 		["Подписывать Вершины", "drawVertsChars"],
 		[],
@@ -310,13 +335,47 @@ class PlayState extends FlxUIState
 			UI_Ray_Box.add(stepper);
 			UI_Ray_AxisSteppers.push(stepper);
 		}
-		UI_Ray_AxisWrongText = new FlxUIText(8, (30 * UI_Ray_AxisSteppersLabels.length + 1) + UI_OffsetY, 264, "Лучи параллельного проектирования вне лимита!", 32);
+
+		UI_Ray_AxisWrongText = new FlxUIText(0, 0, 760, "Лучи параллельного проектирования вне лимита!", 30);
 		UI_Ray_AxisWrongText.setBorderStyle(FlxTextBorderStyle.OUTLINE);
-		UI_Ray_AxisWrongText.color = FlxColor.RED;
-		UI_Ray_AxisWrongText.borderColor = FlxColor.RED;
-		UI_Ray_AxisWrongText.borderSize = 0.5;
+		UI_Ray_AxisWrongText.alignment = CENTER;
+		UI_Ray_AxisWrongText.color = 0xFFFF5050;
+		UI_Ray_AxisWrongText.borderColor = 0xFF000000;
+		UI_Ray_AxisWrongText.borderSize = 2;
+		UI_Ray_AxisWrongText.visible = false;
 		UI_Ray_Box.add(UI_Ray_AxisWrongText);
 
+		UI_Ray_AxisWrongText.y = 20;
+		UI_Ray_AxisWrongText.x = 240;
+
+		var saveY = (30 * UI_Ray_AxisSteppersLabels.length + 1) + UI_OffsetY;
+
+		axisList.push(new FlxSprite().loadGraphic(new AxisXYZBitmapData(0, 0)));
+		axisList.push(new FlxSprite().loadGraphic(new AxisXBitmapData(0, 0)));
+		axisList.push(new FlxSprite().loadGraphic(new AxisYBitmapData(0, 0)));
+		axisList.push(new FlxSprite().loadGraphic(new AxisZBitmapData(0, 0)));
+
+		// X OFFSET =  (280 - 190) / 2
+
+		UI_Ray_AxisSpriteBG = new FlxSprite(45, saveY).makeGraphic(190, 190, 0xFF000000);
+		UI_Ray_AxisSprite = new FlxSprite(50, saveY + 5).makeGraphic(180, 180, 0xFFAAAAAA);
+
+		UI_Ray_Box.add(UI_Ray_AxisSpriteBG);
+		UI_Ray_Box.add(UI_Ray_AxisSprite);
+
+		for (spr in axisList){
+
+			spr.setGraphicSize(UI_Ray_AxisSprite.width, UI_Ray_AxisSprite.height);
+			spr.offset.set();
+			spr.x = 50;
+			spr.y = saveY + 5;
+
+			spr.updateHitbox();
+
+			spr.visible = false;
+
+			UI_Ray_Box.add(spr);
+		}
 
 		for (i in 0...UI_AxisSteppersLabels.length){
 			var posY = 30 * i + UI_OffsetY * 2;
@@ -385,7 +444,7 @@ class PlayState extends FlxUIState
 		add(UI_SL_Box);
 
 		UI_SL_ResetButton = new FlxUIButton(8, UI_OffsetY, "Сбросить", function() {
-			loadModel(null);
+			loadNextModel(null);
 		});
 		UI_SL_ResetButton.label.size = 20;
 		UI_SL_ResetButton.label.width = 128;
@@ -430,11 +489,11 @@ class PlayState extends FlxUIState
 							}
 							switch (params[1]){
 								case 1:
-									rayRotation.x = sender.value;
+									rayRotation.z = -sender.value;
 								case 2:
 									rayRotation.y = sender.value;
 								case 3:
-									rayRotation.z = sender.value;
+									rayRotation.x = sender.value;
 							}
 							rayRotationError = (new LVector(0, -1, 0).rotate(rayRotation)).y >= 0;
 							if (!rayRotationError){
@@ -500,53 +559,11 @@ class PlayState extends FlxUIState
 			modelShadowVertices.push(vertShadow);
 		}
 
-		FlxSpriteUtil.flashGfx.clear();
-		FlxSpriteUtil.fill(planeSprite, 0xFF8888DD);
-		FlxSpriteUtil.fill(axisSprite, FlxColor.TRANSPARENT);
-		FlxSpriteUtil.drawPolygon(planeSprite, [
-			new LVector(-planeScale,  0,  -planeScale).toFlxPoint(), 
-			new LVector( planeScale,  0,  -planeScale).toFlxPoint(), 
-			new LVector( planeScale,  0,  planeScale ).toFlxPoint(), 
-			new LVector(-planeScale,  0,  planeScale ).toFlxPoint()
-		], 0xFFBBBBBB);
-
-		if (OptionsHandler.instance.drawGrid){
-			var scale:Int = Std.int(planeScale);
-			for (i in -scale...scale+1)
-			{
-				if (i == 0) continue;
-
-				var axisX1 = new LVector(-scale, 0, i).toFlxPoint();
-				var axisX2 = new LVector(scale, 0, i).toFlxPoint();
-				FlxSpriteUtil.drawLine(planeSprite, axisX1.x, axisX1.y, axisX2.x, axisX2.y, {
-					thickness: 1.5,
-					color: 0xFF000000
-				});
-				var axisZ1 = new LVector(i, 0, -scale).toFlxPoint();
-				var axisZ2 = new LVector(i, 0, scale).toFlxPoint();
-				FlxSpriteUtil.drawLine(planeSprite, axisZ1.x, axisZ1.y, axisZ2.x, axisZ2.y, {
-					thickness: 1.5,
-					color: 0xFF000000
-				});
-			}
-		}
-		onChangeModel();
 		onChangeAxis();
+		onChangeModel();
 		reloadVerticesTexts();
 	}
 	public function onChangeModel() {
-		if (showRayDir)
-		{
-			FlxSpriteUtil.fill(raySprite, FlxColor.TRANSPARENT);
-			
-			var start = new LVector().toFlxPoint();
-			var end = new LVector(0, 7, 0).rotate(rayRotation).toFlxPoint();
-
-			FlxSpriteUtil.drawLine(raySprite, start.x, start.y, end.x, end.y, {
-				thickness: 2,
-				color: rayRotationError ? 0x80CC0000 : 0x80000000
-			});
-		} 
 		FlxSpriteUtil.fill(vertSprite, FlxColor.TRANSPARENT);
 		FlxSpriteUtil.fill(edgeSprite, FlxColor.TRANSPARENT);
 		FlxSpriteUtil.fill(faceSprite, FlxColor.TRANSPARENT);
@@ -637,21 +654,62 @@ class PlayState extends FlxUIState
 					}
 				}
 			}
-			var center:LVector = new LVector();
+			camFollowVector = new LVector();
 			var divide:Float = 0;
 			for (vert in modelVertices){
-				center.plus(vert);
+				camFollowVector.plus(vert);
 				divide += 1;
 			}
 			for (vert in modelShadowVertices){
-				center.plus(vert);
+				camFollowVector.plus(vert);
 				divide += 1;
 			}
-			center.divideF(divide);
-			camFollowPos = center.toFlxPoint();
+			camFollowVector.divideF(divide);
+			camFollowPos = camFollowVector.toFlxPoint();
 		}
 	}
-	public function onChangeAxis() {
+	public function onChangeAxis() 
+	{
+		var offset:LVector = new LVector(
+			Std.int(camFollowVector.x), 
+			Std.int(camFollowVector.y),
+			Std.int(camFollowVector.z)
+		);
+
+		FlxSpriteUtil.fill(axisSprite, FlxColor.TRANSPARENT);
+
+		FlxSpriteUtil.flashGfx.clear();
+		FlxSpriteUtil.fill(planeSprite, 0xFF8888DD);
+		FlxSpriteUtil.drawPolygon(planeSprite, [
+			new LVector(-planeScale,  0,  -planeScale).plus(offset).toFlxPoint(), 
+			new LVector( planeScale,  0,  -planeScale).plus(offset).toFlxPoint(), 
+			new LVector( planeScale,  0,  planeScale ).plus(offset).toFlxPoint(), 
+			new LVector(-planeScale,  0,  planeScale ).plus(offset).toFlxPoint()
+		], 0xFFBBBBBB);
+
+		if (OptionsHandler.instance.drawGrid)
+		{
+			var scale:Int = Std.int(planeScale);
+
+			for (i in -scale...scale+1)
+			{
+				if (i == 0) continue;
+
+				var axisX1 = new LVector(-scale, 0, i).plus(offset).toFlxPoint();
+				var axisX2 = new LVector(scale, 0, i).plus(offset).toFlxPoint();
+				FlxSpriteUtil.drawLine(planeSprite, axisX1.x, axisX1.y, axisX2.x, axisX2.y, {
+					thickness: 1.5,
+					color: 0xFF000000
+				});
+				var axisZ1 = new LVector(i, 0, -scale).plus(offset).toFlxPoint();
+				var axisZ2 = new LVector(i, 0, scale).plus(offset).toFlxPoint();
+				FlxSpriteUtil.drawLine(planeSprite, axisZ1.x, axisZ1.y, axisZ2.x, axisZ2.y, {
+					thickness: 1.5,
+					color: 0xFF000000
+				});
+			}
+		}
+
 		var scale = planeScale;
 		var pos = new LVector();
 		if (selectedVertex != -1){
@@ -661,46 +719,61 @@ class PlayState extends FlxUIState
 		UI_VerticesTexts.visible = OptionsHandler.instance.drawVertsChars;
 		UI_ShadowVerticesTexts.visible = OptionsHandler.instance.drawVertsChars;
 
-		if (StringTools.contains(axisShow, "x"))
+		var axisIndex = ["xyz", "x", "y", "z"].indexOf(axisShow);
+
+		for (i in 0...4)
 		{
-			var axisX1 = new LVector(pos.x - scale, pos.y, pos.z).toFlxPoint();
-			var axisX2 = new LVector(pos.x + scale, pos.y, pos.z).toFlxPoint();
+			if ((i == axisIndex && showRayDir) || (i == 0 && !showRayDir))
+			{
+				axisList[i].visible = true;
+			}
+			else
+			{
+				axisList[i].visible = false;
+			}
+		}
+		
+		if (StringTools.contains(axisShow, "x") || showRayDir)
+		{
+			var axisX1 = new LVector(pos.x - scale, pos.y, pos.z).plus(offset).toFlxPoint();
+			var axisX2 = new LVector(pos.x + scale, pos.y, pos.z).plus(offset).toFlxPoint();
 			FlxSpriteUtil.drawLine(axisSprite, axisX1.x, axisX1.y, axisX2.x, axisX2.y, {
 				thickness: 3.5,
-				color: OptionsHandler.instance.axisColored ? 0xFFFF6060 : 0xFF000000
+				color: 0xFFFF6060
 			});
 		}
-		if (StringTools.contains(axisShow, "z"))
+		if (StringTools.contains(axisShow, "z") || showRayDir)
 		{
-			var axisZ1 = new LVector(pos.x, pos.y, pos.z - scale).toFlxPoint();
-			var axisZ2 = new LVector(pos.x, pos.y, pos.z + scale).toFlxPoint();
+			var axisZ1 = new LVector(pos.x, pos.y, pos.z - scale).plus(offset).toFlxPoint();
+			var axisZ2 = new LVector(pos.x, pos.y, pos.z + scale).plus(offset).toFlxPoint();
 			FlxSpriteUtil.drawLine(axisSprite, axisZ1.x, axisZ1.y, axisZ2.x, axisZ2.y, {
 				thickness: 3.5,
-				color: OptionsHandler.instance.axisColored ? 0xFF6060FF : 0xFF000000
+				color: 0xFF6060FF
 			});
 		}
-		if (StringTools.contains(axisShow, "y"))
+		if (StringTools.contains(axisShow, "y") || showRayDir)
 		{
-			var axisY1 = new LVector(pos.x, pos.y + (selectedVertex != -1 ? -scale : 0), pos.z).toFlxPoint();
-			var axisY2 = new LVector(pos.x, pos.y + scale, pos.z).toFlxPoint();
+			var axisY1 = new LVector(pos.x, pos.y + (selectedVertex != -1 ? -scale : 0), pos.z).plus(offset).toFlxPoint();
+			var axisY2 = new LVector(pos.x, pos.y + scale, pos.z).plus(offset).toFlxPoint();
 			FlxSpriteUtil.drawLine(axisSprite, axisY1.x, axisY1.y, axisY2.x, axisY2.y, {
 				thickness: 3.5,
-				color: OptionsHandler.instance.axisColored ? 0xFF60FF60 : 0xFF000000
+				color: 0xFF60FF60
 			});
 		}
 	}
 
-	var last_showRayDir:Bool = false;
 	var last_axisShow:String = "";
 
 	var selectedVertex:Int = -1;
 
 	override public function update(elapsed:Float)
 	{
-		super.update(elapsed);
-		
+		if (!allowControls) return;
+
 		camFollow.x = FlxMath.lerp(camFollow.x, camFollowPos.x, elapsed);
 		camFollow.y = FlxMath.lerp(camFollow.y, camFollowPos.y, elapsed);
+
+		super.update(elapsed);
 
 		if (FlxG.mouse.justPressed && model != null && !FlxG.mouse.overlaps(UI_Box))
 		{
@@ -743,7 +816,7 @@ class PlayState extends FlxUIState
 			}
 			if (FlxG.mouse.justReleased && UI_OptionsHandlerTween == null){
 			
-	  			UI_OptionsHandlerTween = FlxTween.tween(UI_Opt_Box, {y: (UI_OptionsHandlerOpened ? -UI_Opt_Box.height + 90 : 0)}, 0.5, {ease: FlxEase.bounceOut, onComplete: function(_){
+	  			UI_OptionsHandlerTween = FlxTween.tween(UI_Opt_Box, {y: (UI_OptionsHandlerOpened ? -UI_Opt_Box.height + 90 : 0)}, 0.5, {ease: FlxEase.quartOut, onComplete: function(_){
 					UI_OptionsHandlerTween = null;
 					UI_OptionsHandlerOpened = !UI_OptionsHandlerOpened;
 				}});
@@ -755,15 +828,6 @@ class PlayState extends FlxUIState
 
 		showRayDir = FlxG.mouse.overlaps(UI_Ray_Box) || rayRotationError;
 		UI_Ray_AxisWrongText.visible = rayRotationError;
-
-		var modelAlphaTweenTarget:Float = showRayDir ? 0.25 : 1;
-		modelAlphaTween = FlxMath.lerp(modelAlphaTween, modelAlphaTweenTarget, elapsed * 10);
-		if (Math.abs(modelAlphaTweenTarget - modelAlphaTween) <= 0.075){
-			modelAlphaTween = modelAlphaTweenTarget;
-		}
-		vertSprite.alpha = modelAlphaTween;
-		edgeSprite.alpha = modelAlphaTween;
-		faceSprite.alpha = modelAlphaTween;
 
 		axisShow = "xyz";
 		for (i in 1...UI_Ray_AxisSteppersLabels.length){
@@ -790,19 +854,19 @@ class PlayState extends FlxUIState
 					case 3:
 						axisShow = "z";
 				}
-				showRayDir = true;
 				break;
+				showRayDir = false;
 			}
 		}
-		if (axisShow != last_axisShow){
-			onChangeEverything();
+		if (axisShow != last_axisShow)
+		{
+			onChangeAxis();
 		}
 		last_axisShow = axisShow;
-		
-		if (showRayDir != last_showRayDir){
-			onChangeEverything();
-		}
-		last_showRayDir = showRayDir;
 	}
 }
 @:bitmap("../assets/UI_Button_Options.png") class OptionsBitmapData extends BitmapData { }
+@:bitmap("../assets/AxisXYZ.png") class AxisXYZBitmapData extends BitmapData { }
+@:bitmap("../assets/AxisX.png") class AxisXBitmapData extends BitmapData { }
+@:bitmap("../assets/AxisY.png") class AxisYBitmapData extends BitmapData { }
+@:bitmap("../assets/AxisZ.png") class AxisZBitmapData extends BitmapData { }

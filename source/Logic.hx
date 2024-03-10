@@ -18,7 +18,7 @@ class LVector
 	public static var globalOffset:LVector = new LVector();
 
 	public static var offsetX:Float = -4;
-	public static var offsetY:Float = 0;
+	public static var offsetY:Float = 7.5;
 	public static var offsetZ:Float = 8;
 
 	public var x:Float;
@@ -136,7 +136,7 @@ class LVector
 		toConvert.x += toConvert.z * zOffset;
 		toConvert.y += toConvert.z * zOffset;
 
-        return new FlxPoint(FlxG.width / 2 + toConvert.x * coordsMulty, FlxG.height - toConvert.y * coordsMulty);
+        return new FlxPoint(FlxG.width * PlayState.SCENE_SCALE / 2 + toConvert.x * coordsMulty, FlxG.height * PlayState.SCENE_SCALE - toConvert.y * coordsMulty);
     }
 }
 class Logic {

@@ -2,7 +2,6 @@ import haxe.Json;
 import sys.io.File;
 
 typedef Options = {
-    public var axisColored:Bool;
     public var drawGrid:Bool;
     public var drawVertsChars:Bool;
 
@@ -29,7 +28,6 @@ class OptionsHandler {
         }
         catch (_){
             instance = {
-                axisColored: true,
                 drawGrid: true,
                 drawVertsChars: true,
             

@@ -97,6 +97,7 @@ class LVector
 		z /= right;
 		return new LVector(x, y, z);
 	}
+
     public function rotate(rotation:LVector):LVector
     { 
         var thetaX:Float = rotation.x * Math.PI / 180.0;
